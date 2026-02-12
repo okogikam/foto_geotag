@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>GPS Map Camera v2</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+body {
+  background:#111;
+  color:white;
+  font-family:Arial;
+  padding:20px;
+}
+
+.container {
+  max-width:900px;
+  margin:auto;
+}
+
+canvas {
+  width:100%;
+  border-radius:10px;
+  background:black;
+  box-shadow:0 10px 30px rgba(0,0,0,0.6);
+}
+
+input, textarea, button {
+  width:100%;
+  margin:5px 0;
+  padding:7px;
+  border-radius:6px;
+  border:none;
+}
+
+button {
+  background:#0d6efd;
+  color:white;
+  cursor:pointer;
+  font-weight:bold;
+}
+
+#hiddenMap {
+  width:320px;
+  height:320px;
+  position:absolute;
+  left:-9999px;
+  top:-9999px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <h2>📸 GPS Map Camera</h2>
+
+  <input type="file" id="imageInput" accept="image/*">
+  <textarea id="alamat" placeholder="Masukkan alamat"></textarea>
+  <input type="datetime-local" id="tanggal">
+  <input type="number" id="lat" step="any" placeholder="Latitude, contoh: -3.320654" >
+  <input type="number" id="lng" step="any" placeholder="Longitude, contoh: 114.602668" >
+
+  <button onclick="generate()">Generate Foto GPS</button>
+  <button onclick="downloadImage()">Download JPG</button>
+
+  <canvas id="canvas"></canvas>
+</div>
+
+<div id="hiddenMap" style="width:300px; height:200px;"></div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const imgInput = document.getElementById("imageInput");
+
+let baseImage = new Image();
+let map, marker, circle;
+
+// ================= LOAD IMAGE =================
+imgInput.addEventListener("change", function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+
+  baseImage.onload = function(){
+    canvas.width = baseImage.width;
+    canvas.height = baseImage.height;
+    drawBaseImage();
+  };
+  baseImage.src = URL.createObjectURL(file);
+});
+
+function drawBaseImage(){
+  ctx.drawImage(baseImage, 0, 0);
+}
+
+// ================= GENERATE =================
+async function generate(){
+  const alamat = document.getElementById("alamat").value;
+  const tanggalInput = document.getElementById("tanggal").value;
+  const lat = parseFloat(document.getElementById("lat").value);
+  const lng = parseFloat(document.getElementById("lng").value);
+
+  if(!baseImage.src){
+    alert("Upload gambar dulu!");
+    return;
+  }
+  if(isNaN(lat) || isNaN(lng)){
+    alert("Koordinat tidak valid!");
+    return;
+  }
+
+  drawBaseImage();
+
+  const tanggal = tanggalInput 
+    ? new Date(tanggalInput).toLocaleString("id-ID")
+    : new Date().toLocaleString("id-ID");
+
+  // overlay bawah (lebih tinggi)
+  const overlayHeight = 260;
+  ctx.fillStyle = "rgba(0,0,0,0.65)";
+  ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+
+  // draw map
+  await drawMapToCanvas(lat, lng);
+
+  // === TEXT STYLE (FONT BESAR) ===
+  ctx.fillStyle = "white";
+  ctx.shadowColor = "black";
+  ctx.shadowBlur = 4;
+
+  let textX = 360;
+  let textY = canvas.height - 210;
+
+  ctx.font = "bold 28px Arial";
+  ctx.fillText("LOCATION", textX, textY);
+
+  ctx.font = "bold 28px Arial";
+  textY += 35;
+  wrapText(ctx, alamat, textX, textY, canvas.width - textX - 20, 28);
+
+  textY += 90;
+  ctx.font = "22px Arial";
+  ctx.fillText("Lat " + lat + "° , Long " + lng + "°", textX, textY);
+  textY += 30;
+  ctx.fillText("🕒 " + tanggal, textX, textY);
+  // textY += 26;
+  // ctx.fillText("🌐 Lng: " + lng, textX, textY);
+}
+
+// ================= MAP TO CANVAS =================
+function drawMapToCanvas(lat, lng){
+  return new Promise(resolve => {
+
+    if(!map){
+      map = L.map("hiddenMap", {
+        zoomControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false
+      }).setView([lat, lng], 14);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+      marker = L.marker([lat, lng])
+      .bindPopup("Lokasi Saya")
+      .addTo(map);
+
+      circle = L.circle([lat, lng], {
+        radius: 40, // radius lokasi
+        color: "red",
+        fillColor: "#f03",
+        fillOpacity: 0.2
+      }).addTo(map);
+
+    } else {
+      map.setView([lat, lng], 14);
+      marker.setLatLng([lat, lng]);
+      circle.setLatLng([lat, lng]);
+    }
+
+    setTimeout(() => {
+      const mapDiv = document.getElementById("hiddenMap");
+      const tiles = mapDiv.querySelectorAll("img");
+      const mapCanvas = document.createElement("canvas");
+      mapCanvas.width = 300;
+      mapCanvas.height = 200;
+      const mctx = mapCanvas.getContext("2d");
+
+      let loaded = 0;
+      tiles.forEach(img => {
+        const tile = new Image();
+        tile.crossOrigin = "anonymous";
+        tile.onload = function(){
+          const rect = img.getBoundingClientRect();
+          const parent = mapDiv.getBoundingClientRect();
+          mctx.drawImage(tile, rect.left - parent.left, rect.top - parent.top);
+          loaded++;
+          if(loaded === tiles.length){
+            ctx.drawImage(mapCanvas, 20, canvas.height - 240);
+            resolve();
+          }
+        };
+        tile.src = img.src;
+      });
+    }, 900);
+  });
+}
+
+// ================= WRAP TEXT =================
+function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+  const words = text.split(" ");
+  let line = "";
+  for(let n = 0; n < words.length; n++){
+    const testLine = line + words[n] + " ";
+    const metrics = ctx.measureText(testLine);
+    if(metrics.width > maxWidth && n > 0){
+      ctx.fillText(line, x, y);
+      line = words[n] + " ";
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, y);
+}
+
+// ================= DOWNLOAD =================
+function downloadImage(){
+  const link = document.createElement("a");
+  link.download = "gps-photo.jpg";
+  link.href = canvas.toDataURL("image/jpeg", 0.95);
+  link.click();
+}
+</script>
+
+</body>
+</html>
