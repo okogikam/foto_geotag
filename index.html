@@ -57,18 +57,18 @@ button {
   <h2>📸 GPS Map Camera</h2>
 
   <input type="file" id="imageInput" accept="image/*">
-  <textarea id="alamat" placeholder="Masukkan alamat"></textarea>
+  <textarea id="alamat" placeholder="Masukkan alamat" maxlength="250"></textarea>
   <input type="datetime-local" id="tanggal">
-  <input type="number" id="lat" step="any" placeholder="Latitude, contoh: -3.320654" >
-  <input type="number" id="lng" step="any" placeholder="Longitude, contoh: 114.602668" >
+  <input type="number" id="lat" step="any" placeholder="Latitude, contoh: -3.320654" value="-3.320654">
+  <input type="number" id="lng" step="any" placeholder="Longitude, contoh: 114.602668" value="114.602668">
 
   <button onclick="generate()">Generate Foto GPS</button>
   <button onclick="downloadImage()">Download JPG</button>
 
-  <canvas id="canvas"></canvas>
+  <canvas id="canvas" width="500px" height="300px"></canvas>
 </div>
 
-<div id="hiddenMap" style="width:300px; height:200px;"></div>
+<div id="hiddenMap" style="width:200px; height:200px;"></div>
 
 <script>
 const canvas = document.getElementById("canvas");
@@ -89,6 +89,8 @@ imgInput.addEventListener("change", function(e){
     drawBaseImage();
   };
   baseImage.src = URL.createObjectURL(file);
+  ctx.drawImage(baseImage, 0, 0);
+
 });
 
 function drawBaseImage(){
@@ -110,27 +112,27 @@ async function generate(){
     alert("Koordinat tidak valid!");
     return;
   }
-
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBaseImage();
 
   const tanggal = tanggalInput 
     ? new Date(tanggalInput).toLocaleString("id-ID")
     : new Date().toLocaleString("id-ID");
 
-  // overlay bawah (lebih tinggi)
-  const overlayHeight = 260;
-  ctx.fillStyle = "rgba(0,0,0,0.65)";
-  ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(290, canvas.height- 250, canvas.width - 330,240);
 
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(canvas.width - 300, canvas.height- 329.9, 260,80);
+   drawLogo()
   // draw map
   await drawMapToCanvas(lat, lng);
-
   // === TEXT STYLE (FONT BESAR) ===
   ctx.fillStyle = "white";
   ctx.shadowColor = "black";
   ctx.shadowBlur = 4;
 
-  let textX = 360;
+  let textX = 310;
   let textY = canvas.height - 210;
 
   ctx.font = "bold 28px Arial";
@@ -138,78 +140,22 @@ async function generate(){
 
   ctx.font = "bold 28px Arial";
   textY += 35;
-  wrapText(ctx, alamat, textX, textY, canvas.width - textX - 20, 28);
+  wrapText(ctx, alamat, textX, textY, canvas.width - textX - 50, 28);
 
   textY += 90;
   ctx.font = "22px Arial";
   ctx.fillText("Lat " + lat + "° , Long " + lng + "°", textX, textY);
   textY += 30;
   ctx.fillText("🕒 " + tanggal, textX, textY);
-  // textY += 26;
-  // ctx.fillText("🌐 Lng: " + lng, textX, textY);
 }
-
-// ================= MAP TO CANVAS =================
-function drawMapToCanvas(lat, lng){
-  return new Promise(resolve => {
-
-    if(!map){
-      map = L.map("hiddenMap", {
-        zoomControl: false,
-        dragging: false,
-        scrollWheelZoom: false,
-        doubleClickZoom: false,
-        boxZoom: false,
-        keyboard: false
-      }).setView([lat, lng], 14);
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-
-      marker = L.marker([lat, lng])
-      .bindPopup("Lokasi Saya")
-      .addTo(map);
-
-      circle = L.circle([lat, lng], {
-        radius: 40, // radius lokasi
-        color: "red",
-        fillColor: "#f03",
-        fillOpacity: 0.2
-      }).addTo(map);
-
-    } else {
-      map.setView([lat, lng], 14);
-      marker.setLatLng([lat, lng]);
-      circle.setLatLng([lat, lng]);
-    }
-
-    setTimeout(() => {
-      const mapDiv = document.getElementById("hiddenMap");
-      const tiles = mapDiv.querySelectorAll("img");
-      const mapCanvas = document.createElement("canvas");
-      mapCanvas.width = 300;
-      mapCanvas.height = 200;
-      const mctx = mapCanvas.getContext("2d");
-
-      let loaded = 0;
-      tiles.forEach(img => {
-        const tile = new Image();
-        tile.crossOrigin = "anonymous";
-        tile.onload = function(){
-          const rect = img.getBoundingClientRect();
-          const parent = mapDiv.getBoundingClientRect();
-          mctx.drawImage(tile, rect.left - parent.left, rect.top - parent.top);
-          loaded++;
-          if(loaded === tiles.length){
-            ctx.drawImage(mapCanvas, 20, canvas.height - 240);
-            resolve();
-          }
-        };
-        tile.src = img.src;
-      });
-    }, 900);
-  });
+// ====logo===
+function drawLogo(){
+  let logo = new Image();
+  logo.src = "./logo.png";
+  logo.onload = ()=>{
+     ctx.drawImage(logo,canvas.width - 280, canvas.height- 325,230,80);
+  }
 }
-
 // ================= WRAP TEXT =================
 function wrapText(ctx, text, x, y, maxWidth, lineHeight){
   const words = text.split(" ");
@@ -227,7 +173,66 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight){
   }
   ctx.fillText(line, x, y);
 }
+// ================= MAP TO CANVAS =================
+function drawMapToCanvas(lat, lng){
+  return new Promise(resolve => {
 
+    if(!map){
+      map = L.map("hiddenMap", {
+        zoomControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false
+      }).setView([lat, lng], 15);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+      marker = L.marker([lat, lng])
+      .bindPopup("Lokasi Saya")
+      .addTo(map);
+
+      circle = L.circle([lat, lng], {
+        radius: 40, // radius lokasi
+        color: "red",
+        fillColor: "#f03",
+        fillOpacity: 0.2
+      }).addTo(map);
+
+    } else {
+      map.setView([lat, lng], 15);
+      marker.setLatLng([lat, lng]);
+      circle.setLatLng([lat, lng]);
+    }
+
+    setTimeout(() => {
+      const mapDiv = document.getElementById("hiddenMap");
+      const tiles = mapDiv.querySelectorAll("img");
+      const mapCanvas = document.createElement("canvas");
+      mapCanvas.width = 260;
+      mapCanvas.height = 239;
+      const mctx = mapCanvas.getContext("2d");
+
+      let loaded = 0;
+      tiles.forEach(img => {
+        const tile = new Image();
+        tile.crossOrigin = "anonymous";
+        tile.onload = function(){
+          const rect = img.getBoundingClientRect();
+          const parent = mapDiv.getBoundingClientRect();
+          mctx.drawImage(tile, rect.left - parent.left, rect.top - parent.top);
+          loaded++;
+          if(loaded === tiles.length){
+            ctx.drawImage(mapCanvas, 30, canvas.height - 250);
+            resolve();
+          }
+        };
+        tile.src = img.src;
+      });
+    }, 900);
+  });
+}
 // ================= DOWNLOAD =================
 function downloadImage(){
   const link = document.createElement("a");
